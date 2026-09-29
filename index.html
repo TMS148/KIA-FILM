@@ -394,60 +394,70 @@ let DATABASE = [];
 let CAR_MODELS = [];
 const PART_TYPES_MAP = { "front": "前擋", "body": "車身", "sunroof": "天窗" };
 
-// 載入 Excel 對照表
+// 自動載入 Excel 檔案
 async function loadExcelData() {
     try {
         let response = await fetch('database.xlsx');
         if (!response.ok) throw new Error("找不到 database.xlsx");
-        
+
         let arrayBuffer = await response.arrayBuffer();
         let workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-        // 1. 解析隔熱紙對照表 Sheet
+        // 1. 解析【隔熱紙】Sheet
         let filmSheetName = workbook.SheetNames.find(n => n.includes('隔熱紙') || n.toLowerCase().includes('film') || n.toLowerCase().includes('part')) || workbook.SheetNames[0];
         let rawFilmJson = XLSX.utils.sheet_to_json(workbook.Sheets[filmSheetName]);
-        
-        DATABASE = rawFilmJson.map(row => ({
-            brand: String(row.brand || '').trim(),
-            part_type: String(row.part_type || '').trim(),
-            series: String(row.series || '').trim(),
-            part_no: String(row.part_no || '').trim(),
-            raw_cars: String(row.raw_cars || '').trim(),
-            cars: String(row.cars || '').split(',').map(c => c.trim()).filter(Boolean),
-            vlts: String(row.vlts || '').split(',').map(v => v.trim()).filter(Boolean)
-        }));
 
-        // 2. 解析車型對照表 Sheet (若存在於 database.xlsx 內)
+        DATABASE = rawFilmJson.map(row => {
+            let brand = String(row['品牌'] || row['brand'] || '').trim();
+            
+            // 位置校正 (前檔/前擋、去除前後空格)
+            let rawPos = String(row['位置'] || row['part_type'] || '').trim();
+            let partType = (rawPos === '前檔') ? '前擋' : rawPos;
+
+            let series = String(row['系列'] || row['series'] || '').trim();
+            let partNo = String(row['件號'] || row['part_no'] || '').trim();
+            let rawCars = String(row['車型 / 規格'] || row['車型/規格'] || row['車型'] || row['raw_cars'] || row['cars'] || '').trim();
+
+            let cars = rawCars.split(/[,/]+/).map(c => c.trim()).filter(Boolean);
+
+            // 解析透光度 (相容點點或逗點分隔)
+            let rawVlts = String(row['透光度'] || row['vlts'] || '').trim();
+            let vlts = rawVlts.split(/[,\.\s]+/).map(v => v.trim()).filter(Boolean);
+
+            return {
+                brand: brand,
+                part_type: partType,
+                series: series,
+                part_no: partNo,
+                raw_cars: rawCars,
+                cars: cars,
+                vlts: vlts
+            };
+        });
+
+        // 2. 解析【車型】Sheet
         let modelSheetName = workbook.SheetNames.find(n => n.includes('車型') || n.toLowerCase().includes('model'));
         if (modelSheetName) {
             parseModelsFromSheet(workbook.Sheets[modelSheetName]);
-        } else {
-            // 若 database.xlsx 無車型 Sheet，則嘗試讀取獨立的 車型對照表.xlsx
-            await loadSeparateModelFile();
+        } else if (workbook.SheetNames.length > 1) {
+            parseModelsFromSheet(workbook.Sheets[workbook.SheetNames[1]]);
         }
 
         renderCarModelOptions();
         document.getElementById('loading').style.display = 'none';
         updateNote();
     } catch (err) {
-        console.warn("自動載入失敗，嘗試讀取獨立車型檔...", err);
-        await loadSeparateModelFile();
-        if (CAR_MODELS.length > 0) {
-            renderCarModelOptions();
-            document.getElementById('loading').style.display = 'none';
-            updateNote();
-        } else {
-            alert("載入 Excel 失敗！請確認目錄下是否有 database.xlsx 或 車型對照表.xlsx");
-            document.getElementById('loading').innerText = "❌ 載入失敗，請確認對照表檔案是否存在";
-        }
+        console.error("載入 Excel 失敗", err);
+        alert("載入 database.xlsx 失敗，請確認檔案已放置於 Repository 根目錄下！");
+        document.getElementById('loading').innerText = "❌ 載入失敗，請檢查檔名或網頁主機設定";
     }
 }
 
 function parseModelsFromSheet(worksheet) {
     let rawJson = XLSX.utils.sheet_to_json(worksheet);
     CAR_MODELS = rawJson.map(row => {
-        let code = String(row['車型'] || row['code'] || '').trim();
-        let name = String(row['商品名'] || row['name'] || '').trim();
+        let code = String(row['車型'] || row['代碼'] || row['code'] || '').trim();
+        let name = String(row['商品名'] || row['車款名稱'] || row['name'] || '').trim();
         if (!code) return null;
         return {
             code: code,
@@ -455,21 +465,6 @@ function parseModelsFromSheet(worksheet) {
             displayText: name ? `${code} - ${name}` : code
         };
     }).filter(Boolean);
-}
-
-async function loadSeparateModelFile() {
-    const fileNames = ['車型對照表.xlsx', 'car_models.xlsx', 'models.xlsx'];
-    for (let fileName of fileNames) {
-        try {
-            let res = await fetch(encodeURIComponent(fileName));
-            if (res.ok) {
-                let buffer = await res.arrayBuffer();
-                let wb = XLSX.read(buffer, { type: 'array' });
-                parseModelsFromSheet(wb.Sheets[wb.SheetNames[0]]);
-                return;
-            }
-        } catch (e) { }
-    }
 }
 
 function renderCarModelOptions() {
@@ -496,8 +491,12 @@ function cleanSeriesName(name) {
 function checkModelMatch(userCarModel, item) {
     if (!userCarModel) return true;
     const userCode = userCarModel.split(' - ')[0].trim().toUpperCase();
+    
     if (item.cars.some(c => c.toUpperCase() === userCode)) return true;
-    if (item.raw_cars.toUpperCase().includes(userCode)) return true;
+    
+    const rawUpper = item.raw_cars.toUpperCase();
+    if (rawUpper === userCode || rawUpper.includes(userCode)) return true;
+
     return false;
 }
 
