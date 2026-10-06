@@ -457,16 +457,33 @@ async function loadExcelData() {
 }
 
 function parseModelsFromSheet(worksheet) {
-    let rawJson = XLSX.utils.sheet_to_json(worksheet);
+    // 使用 header: 1 將 Excel 轉為二維陣列 [ [列1], [列2], ... ] 避免欄位名稱無法解析
+    let rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     CAR_MODELS = [];
     VIN_PREFIX_MAP = {};
 
-    rawJson.forEach(row => {
-        let code = String(row['車型'] || row['代碼'] || row['code'] || '').trim();
-        let name = String(row['商品名'] || row['車款名稱'] || row['name'] || '').trim();
-        let vinPrefix = String(row['VIN'] || row['vin'] || '').trim().toUpperCase();
+    if (rows.length < 2) return;
 
-        if (!code) return;
+    // 尋找表頭欄位索引
+    let header = rows[0].map(h => String(h || '').trim().toUpperCase());
+    let codeIdx = header.findIndex(h => h.includes('車型') || h.includes('代碼') || h === 'CODE');
+    let nameIdx = header.findIndex(h => h.includes('商品名') || h.includes('車款') || h === 'NAME');
+    let vinIdx = header.findIndex(h => h.includes('VIN'));
+
+    // 預設位置防呆（0:車型, 1:商品名, 2:VIN）
+    if (codeIdx === -1) codeIdx = 0;
+    if (nameIdx === -1) nameIdx = 1;
+    if (vinIdx === -1) vinIdx = 2;
+
+    for (let i = 1; i < rows.length; i++) {
+        let row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        let code = String(row[codeIdx] || '').trim();
+        let name = String(row[nameIdx] || '').trim();
+        let vinPrefix = String(row[vinIdx] || '').trim().toUpperCase();
+
+        if (!code) continue;
 
         let displayText = name ? `${code} - ${name}` : code;
         CAR_MODELS.push({
@@ -479,7 +496,7 @@ function parseModelsFromSheet(worksheet) {
         if (vinPrefix) {
             VIN_PREFIX_MAP[vinPrefix] = displayText;
         }
-    });
+    }
 }
 
 function renderCarModelOptions() {
@@ -527,15 +544,22 @@ function onVinInput() {
         vinAlert.style.display = 'none';
     }
 
-    // 判斷車身碼前 4 碼對應車型
+    // 當輸入達到 4 碼以上時比對 VIN 前綴
     if (cleanedValue.length >= 4) {
         const prefix4 = cleanedValue.substring(0, 4);
-        if (VIN_PREFIX_MAP[prefix4]) {
+        const matchedModel = VIN_PREFIX_MAP[prefix4];
+
+        if (matchedModel) {
             const carModelSelect = document.getElementById('carModel');
-            if (carModelSelect.value !== VIN_PREFIX_MAP[prefix4]) {
-                carModelSelect.value = VIN_PREFIX_MAP[prefix4];
-                onCarModelChange();
-                return;
+            // 比對下拉選單中的 Option 值
+            for (let i = 0; i < carModelSelect.options.length; i++) {
+                if (carModelSelect.options[i].value === matchedModel) {
+                    if (carModelSelect.selectedIndex !== i) {
+                        carModelSelect.selectedIndex = i;
+                        onCarModelChange();
+                    }
+                    break;
+                }
             }
         }
     }
