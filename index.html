@@ -6,7 +6,7 @@
     <title>KIA 隔熱紙下單小幫手</title>
 
     <!-- 引入 SheetJS 解析 Excel 檔案 -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="lib/xlsx.full.min.js"></script>
 
     <style>
         :root {
@@ -199,7 +199,7 @@
 
 <div class="container">
     <div class="header-title">
-        <img class="kia-logo" src="https://www.kia.com/etc.clientlibs/kwp-global/clientlibs/clientlib-site/resources/images/common/logo_w.svg" alt="KIA Logo" onerror="this.onerror=null; this.outerHTML='<svg class=\'kia-logo\' viewBox=\'0 0 132 32\' xmlns=\'http://www.w3.org/2000/svg\'><path fill=\'#ffffff\' d=\'M32.5 0 L15.7 18.9 L0 18.9 L0 0 L7.4 0 L7.4 11.8 L18.9 0 L32.5 0 Z M15.7 18.9 L32.5 32 L19.7 32 L7.4 20.2 L7.4 32 L0 32 L0 18.9 L15.7 18.9 Z M45.8 0 L53.2 0 L53.2 32 L45.8 32 L45.8 0 Z M93.3 0 L76.5 18.9 L68.8 18.9 L68.8 0 L61.4 0 L61.4 32 L68.8 32 L68.8 18.9 L84.5 32 L99.2 32 L82.4 18.9 L93.3 0 Z\'/></svg>';">
+        <img class="kia-logo" src="https://www.kia.com/etc.clientlibs/kwp-global/clientlibs/clientlib-site/resources/images/common/logo_w.svg" alt="KIA Logo" onerror="this.onerror=null; this.outerHTML='<svg class='kia-logo' viewBox='0 0 132 32' xmlns='http://www.w3.org/2000/svg'><path fill='#ffffff' d='M32.5 0 L15.7 18.9 L0 18.9 L0 0 L7.4 0 L7.4 11.8 L18.9 0 L32.5 0 Z M15.7 18.9 L32.5 32 L19.7 32 L7.4 20.2 L7.4 32 L0 32 L0 18.9 L15.7 18.9 Z M45.8 0 L53.2 0 L53.2 32 L45.8 32 L45.8 0 Z M93.3 0 L76.5 18.9 L68.8 18.9 L68.8 0 L61.4 0 L61.4 32 L68.8 32 L68.8 18.9 L84.5 32 L99.2 32 L82.4 18.9 L93.3 0 Z'/></svg>';">
         <h2>隔熱紙下單小幫手</h2>
     </div>
 
@@ -741,7 +741,7 @@ function updatePartInfo(partKey) {
     updateNote();
 }
 
-// 格式化型號與透光度的輔助函式
+// 用於將型號與透光度依照品牌規則格式化的輔助函式
 function formatFilmName(brand, seriesRaw, vlt) {
     const series = cleanSeriesName(seriesRaw);
     if (!vlt) return `${brand} ${series}`;
@@ -768,18 +768,12 @@ function updateNote() {
 
     let lines = [];
 
-    // 必填欄位：不論是否有填寫，標題皆必須固定保留顯示
-    lines.push(`車身碼：${vin}`);
-    lines.push(`車型：${carModel}`);
-    
-    // 選填欄位：有填寫時才放進備註區，沒填就完全隱藏不顯示
-    if (carColor) {
-        lines.push(`車色：${carColor}`);
-    }
-    
-    // 必填欄位
-    lines.push(`業代：${agent}`);
-    lines.push(`存放(施工)地點：${location}`);
+    // 必填與選填判定：有填才放進陣列，沒填就直接跳過
+    if (vin) lines.push(`車身碼：${vin}`);
+    if (carModel) lines.push(`車型：${carModel}`);
+    if (carColor) lines.push(`車色：${carColor}`);
+    if (agent) lines.push(`業代：${agent}`);
+    if (location) lines.push(`存放(施工)地點：${location}`);
 
     // 1. 前擋
     const frontBrand = document.getElementById('front-brand').value;
@@ -824,13 +818,13 @@ function updateNote() {
         lines.push(`天窗：${formattedSunroof}`);
     }
 
-    // 選填欄位：交車日有填才加入
+    // 日期格式化：有填才加入
     if (deliveryDateRaw) {
         const deliveryDateStr = deliveryDateRaw.replace(/-/g, '/');
         lines.push(`交車日：${deliveryDateStr}`);
     }
 
-    // 選填欄位：補充事項有填才加入
+    // 補充事項：有填才加入
     if (otherInfo) {
         lines.push(`補充事項：${otherInfo}`);
     }
